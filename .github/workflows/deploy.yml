@@ -71,8 +71,8 @@ jobs:
           echo "DB_USERNAME=${DB_USERNAME}" >> .env
           echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
 
-      - name: Run database migrations
-        run: php artisan migrate --force
+      #- name: Run database migrations
+      #  run: php artisan migrate --force
 
       - name: Create deployment archive
         run: |
