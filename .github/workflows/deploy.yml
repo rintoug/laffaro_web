@@ -1,0 +1,249 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MYSQL_DATABASE: ${{ secrets.DB_DATABASE }}
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: ${{ secrets.DB_DATABASE }}
+      DB_USERNAME: root
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, dom, filter, gd, json, zip
+          tools: composer:v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+      - name: Install NPM dependencies
+        run: npm ci
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Setup environment file
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          
+          # Configure database from GitHub secrets
+          sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env
+          sed -i "s/DB_HOST=.*/DB_HOST=127.0.0.1/" .env
+          sed -i "s/DB_PORT=.*/DB_PORT=3306/" .env
+          sed -i "s/DB_DATABASE=.*/DB_DATABASE=${{ secrets.DB_DATABASE }}/" .env
+          sed -i "s/DB_USERNAME=.*/DB_USERNAME=root/" .env
+          sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${{ secrets.DB_PASSWORD }}/" .env
+
+      - name: Run database migrations
+        run: php artisan migrate --force
+
+      - name: Create deployment archive
+        run: |
+          # Remove development files
+          rm -rf node_modules tests .git .github
+          rm -f .env.example .gitignore package.json package-lock.json vite.config.js
+          
+          # IMPORTANT: Remove entire storage directory (will be preserved from server)
+          rm -rf storage
+          
+          # Create deployment package (excluding storage completely)
+          tar -czf deployment.tar.gz .
+
+      - name: Transfer and Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            cd ${{ secrets.SERVER_PATH }}
+            
+            # Backup current deployment
+            if [ -d "backup" ]; then rm -rf backup; fi
+            if [ -f "deployment.tar.gz" ]; then
+              mkdir -p backup
+              cp -r app resources routes config database public vendor bootstrap backup/ 2>/dev/null || true
+            fi
+
+      - name: Copy deployment package
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          source: "deployment.tar.gz"
+          target: ${{ secrets.SERVER_PATH }}
+
+      - name: Extract and finalize deployment
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            # Set deployment paths
+            DEPLOY_PATH="${{ secrets.SERVER_PATH }}"
+            TEMP_PATH="${DEPLOY_PATH}/temp_deployment_$(date +%s)"
+            CURRENT_PATH="${DEPLOY_PATH}/current"
+            BACKUP_PATH="${DEPLOY_PATH}/backup"
+            
+            cd $DEPLOY_PATH
+            
+            # Create temporary deployment directory
+            mkdir -p $TEMP_PATH
+            
+            # Extract new deployment to temporary directory
+            tar -xzf deployment.tar.gz -C $TEMP_PATH
+            rm deployment.tar.gz
+            
+            # Copy persistent files from current deployment (if exists)
+            if [ -d "$CURRENT_PATH" ]; then
+              # Copy .env file
+              if [ -f "$CURRENT_PATH/.env" ]; then
+                cp "$CURRENT_PATH/.env" "$TEMP_PATH/"
+              fi
+              
+              # IMPORTANT: Completely preserve the storage directory
+              if [ -d "$CURRENT_PATH/storage" ]; then
+                # Remove any storage directory from new deployment
+                rm -rf "$TEMP_PATH/storage"
+                
+                # Copy the entire existing storage directory
+                cp -r "$CURRENT_PATH/storage" "$TEMP_PATH/"
+                
+                echo "Storage directory preserved from current deployment"
+              else
+                echo "No existing storage directory found - will create fresh one"
+              fi
+            else
+              # First deployment - create basic storage structure
+              echo "First deployment detected - creating storage structure"
+            fi
+            
+            # Ensure storage directory exists and has correct structure
+            if [ ! -d "$TEMP_PATH/storage" ]; then
+              mkdir -p "$TEMP_PATH/storage/app/public"
+              mkdir -p "$TEMP_PATH/storage/framework/cache"
+              mkdir -p "$TEMP_PATH/storage/framework/sessions"  
+              mkdir -p "$TEMP_PATH/storage/framework/views"
+              mkdir -p "$TEMP_PATH/storage/logs"
+              
+              echo "Created fresh storage directory structure"
+            fi
+            
+            # Setup new deployment
+            cd $TEMP_PATH
+            
+            # Run database migrations
+            php artisan migrate --force
+            
+            # Create storage link if not exists
+            php artisan storage:link
+            
+            # Clear and cache config
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            
+            # Test if deployment is working (basic check)
+            php artisan --version || { echo "Deployment test failed"; exit 1; }
+            
+            # Atomic switch: Move current to backup, temp to current
+            cd $DEPLOY_PATH
+            
+            # Create backup of current deployment
+            if [ -d "$CURRENT_PATH" ]; then
+              rm -rf $BACKUP_PATH 2>/dev/null || true
+              mv $CURRENT_PATH $BACKUP_PATH
+            fi
+            
+            # Atomically activate new deployment
+            mv $TEMP_PATH $CURRENT_PATH
+            
+            echo "Deployment completed successfully!"
+            echo "Current: $CURRENT_PATH"
+            echo "Backup available at: $BACKUP_PATH"
+            
+            # Set proper permissions for web server
+            cd $CURRENT_PATH
+            chmod -R 755 storage bootstrap/cache 2>/dev/null || true
+            
+            # Optional: Restart services (uncomment if needed)
+            # sudo systemctl restart php8.2-fpm
+            # php artisan queue:restart
+
+      - name: Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          script: |
+            DEPLOY_PATH="${{ secrets.SERVER_PATH }}"
+            CURRENT_PATH="${DEPLOY_PATH}/html"
+            BACKUP_PATH="${DEPLOY_PATH}/backup"
+            
+            echo "Deployment failed! Attempting rollback..."
+            
+            if [ -d "$BACKUP_PATH" ]; then
+              # Remove failed deployment
+              rm -rf $CURRENT_PATH 2>/dev/null || true
+              
+              # Restore backup
+              mv $BACKUP_PATH $CURRENT_PATH
+              
+              echo "Rollback completed successfully!"
+              echo "Restored to previous version: $CURRENT_PATH"
+            else
+              echo "No backup available for rollback"
+            fi
+
+      - name: Deployment Success Notification
+        if: success()
+        run: echo "Deployment completed successfully!"
+
+      - name: Deployment Failed Notification
+        if: failure()
+        run: echo "Deployment failed! "
