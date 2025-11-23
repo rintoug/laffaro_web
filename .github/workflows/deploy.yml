@@ -58,30 +58,13 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
-      - name: Setup environment file
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-          
-          # Configure database from environment variables
-          echo "DB_CONNECTION=${DB_CONNECTION}" >> .env
-          echo "DB_HOST=${DB_HOST}" >> .env
-          echo "DB_PORT=${DB_PORT}" >> .env
-          echo "DB_DATABASE=${DB_DATABASE}" >> .env
-          echo "DB_USERNAME=${DB_USERNAME}" >> .env
-          echo "DB_PASSWORD=${DB_PASSWORD}" >> .env
-
-      #- name: Run database migrations
-      #  run: php artisan migrate --force
-
       - name: Create deployment archive
         run: |
           # Remove development files
           rm -rf node_modules tests .git .github
           rm -f .env.example .gitignore package.json package-lock.json vite.config.js
           
-          # Remove .env file (will be preserved from server)
-          rm -f .env
+          
           
           # IMPORTANT: Remove entire storage directory (will be preserved from server)
           rm -rf storage
