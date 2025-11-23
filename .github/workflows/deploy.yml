@@ -222,7 +222,7 @@ jobs:
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
             DEPLOY_PATH="${{ secrets.SERVER_PATH }}"
-            CURRENT_PATH="${DEPLOY_PATH}/html"
+            CURRENT_PATH="${DEPLOY_PATH}/current"
             BACKUP_PATH="${DEPLOY_PATH}/backup"
             
             echo "Deployment failed! Attempting rollback..."
