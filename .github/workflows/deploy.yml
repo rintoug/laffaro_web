@@ -83,8 +83,8 @@ jobs:
           script: |
             set -e
             
-            echo "=== Deploying to ${APP_PATH} ==="
-            echo "SERVER_PATH: ${APP_PATH}"
+            echo "=== Starting Deployment ==="
+            echo "Deploying to: $(dirname ${APP_PATH})/$(basename ${APP_PATH})"
             
             # Create app directory if doesn't exist
             mkdir -p "${APP_PATH}"
