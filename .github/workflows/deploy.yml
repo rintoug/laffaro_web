@@ -37,9 +37,22 @@ jobs:
       - name: Create deployment package
         run: |
           # Remove unnecessary files
-          rm -rf node_modules .git .github .gitignore .env.example
-          rm -f package.json package-lock.json vite.config.js phpunit.xml
-          tar -czf deploy.tar.gz .
+          # rm -rf node_modules .git .github .gitignore .env.example
+          # rm -f package.json package-lock.json vite.config.js phpunit.xml
+          # tar -czf deploy.tar.gz .
+
+          # Create a clean build directory
+          mkdir build
+
+          # Copy only required files
+          rsync -av --exclude=node_modules --exclude=.git --exclude=.github \
+            --exclude=.gitignore --exclude=.env.example \
+            --exclude=package.json --exclude=package-lock.json \
+            --exclude=vite.config.js --exclude=phpunit.xml \
+            ./ build/
+
+          # Create the tar from the clean folder
+          tar -czf deploy.tar.gz -C build .
 
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.7
