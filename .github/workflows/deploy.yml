@@ -137,13 +137,39 @@ jobs:
             sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
             
             echo "✅ Database credentials updated from GitHub secrets"
+
+            # Fix storage permissions
+            echo "Setting storage permissions..."
+            chmod -R 775 storage
+            chmod -R 775 bootstrap/cache
             
+            # Ensure storage directories are web-accessible
+            find storage -type f -exec chmod 664 {} \;
+            find storage -type d -exec chmod 775 {} \;
+            
+            # Remove old storage link if exists
+            rm -f public/storage
             
             # Run Laravel commands
             php artisan migrate --force
-            php artisan storage:link
+            php artisan storage:link --force
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
+            
+            # Verify storage link
+            if [ -L "public/storage" ]; then
+              echo "✅ Storage link created successfully"
+              ls -la public/storage
+            else
+              echo "⚠️ Storage link creation failed"
+            fi
+            
+            # Set ownership to web server user (adjust www-data to your web server user)
+            echo "Current user: $(whoami)"
+            echo "Setting ownership for web server..."
+            # Uncomment and adjust the user if needed:
+            # chown -R www-data:www-data storage bootstrap/cache public/storage
+            # Or for nginx: chown -R nginx:nginx storage bootstrap/cache public/storage
             
             echo "=== Deployment Complete ==="
