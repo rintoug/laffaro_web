@@ -138,6 +138,7 @@ jobs:
             
             echo "✅ Database credentials updated from GitHub secrets"
             
+            
             # Run Laravel commands
             php artisan migrate --force
             php artisan storage:link
