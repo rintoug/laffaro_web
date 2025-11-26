@@ -66,12 +66,19 @@ jobs:
 
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.1.0
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           command_timeout: 30m
+          envs: DB_HOST,DB_PORT,DB_DATABASE,DB_USERNAME,DB_PASSWORD
           script: |
             set -e
             
@@ -119,8 +126,16 @@ jobs:
               # First deployment - create .env
               cp .env.example .env
               php artisan key:generate
-              echo "⚠️ Please update .env with your database and app settings!"
             fi
+            
+            # Update database credentials from GitHub secrets
+            sed -i "s/^DB_HOST=.*/DB_HOST=${DB_HOST}/" .env
+            sed -i "s/^DB_PORT=.*/DB_PORT=${DB_PORT}/" .env
+            sed -i "s/^DB_DATABASE=.*/DB_DATABASE=${DB_DATABASE}/" .env
+            sed -i "s/^DB_USERNAME=.*/DB_USERNAME=${DB_USERNAME}/" .env
+            sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${DB_PASSWORD}/" .env
+            
+            echo "✅ Database credentials updated from GitHub secrets"
             
             # Run Laravel commands
             php artisan migrate --force
