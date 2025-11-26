@@ -85,6 +85,7 @@ jobs:
             APP_PATH="${{ secrets.SERVER_PATH }}"
             
             echo "=== Deploying to ${APP_PATH} ==="
+            echo "SERVER_PATH: ${APP_PATH}"
             
             # Create app directory if doesn't exist
             mkdir -p "${APP_PATH}"
