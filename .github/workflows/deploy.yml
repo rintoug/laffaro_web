@@ -4,11 +4,10 @@ on:
   push:
     branches:
       - main
-      - master
 
 jobs:
-  build:
-    name: Build Application
+  deploy:
+    name: Deploy to Server
     runs-on: ubuntu-latest
     
     steps:
@@ -27,85 +26,32 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Get Composer Cache Directory
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+          npm ci
 
-      - name: Cache Composer dependencies
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
-
-      - name: Cache NPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: ${{ runner.os }}-node-
-
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
-
-      - name: Install NPM dependencies
-        run: npm ci
-
-      - name: Build frontend assets
+      - name: Build assets
         run: npm run build
 
       - name: Create deployment package
         run: |
           # Remove unnecessary files
-          rm -rf node_modules tests .git .github .gitignore .env.example
+          rm -rf node_modules .git .github .gitignore .env.example
           rm -f package.json package-lock.json vite.config.js phpunit.xml
-          
-          # Remove storage directory (will use shared storage on server)
-          rm -rf storage
-          
-          # Create deployment archive
-          tar -czf deployment.tar.gz \
-            app \
-            bootstrap \
-            config \
-            database \
-            public \
-            resources \
-            routes \
-            vendor \
-            artisan \
-            composer.json \
-            composer.lock
+          tar -czf deploy.tar.gz .
 
-      - name: Upload deployment artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-package
-          path: deployment.tar.gz
-          retention-days: 1
-
-  deploy:
-    name: Deploy to Server
-    runs-on: ubuntu-latest
-    needs: build
-    
-    steps:
-      - name: Download deployment artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-package
-
-      - name: Copy deployment package to server
+      - name: Copy files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT || 22 }}
-          source: "deployment.tar.gz"
-          target: "${{ secrets.SERVER_PATH }}/releases"
+          source: "deploy.tar.gz"
+          target: "/tmp/"
 
-      - name: Deploy application
+      - name: Deploy on server
         uses: appleboy/ssh-action@v1.1.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -116,234 +62,58 @@ jobs:
           script: |
             set -e
             
-            # Define paths
-            BASE_PATH="${{ secrets.SERVER_PATH }}"
-            RELEASES_PATH="${BASE_PATH}/releases"
-            SHARED_PATH="${BASE_PATH}/shared"
-            CURRENT_PATH="${BASE_PATH}/current"
-            RELEASE_NAME="release_$(date +%Y%m%d_%H%M%S)"
-            RELEASE_PATH="${RELEASES_PATH}/${RELEASE_NAME}"
+            APP_PATH="${{ secrets.SERVER_PATH }}"
             
-            echo "=== Starting Deployment ==="
-            echo "Release: ${RELEASE_NAME}"
+            echo "=== Deploying to ${APP_PATH} ==="
             
-            # Create directory structure
-            mkdir -p "${RELEASES_PATH}"
-            mkdir -p "${SHARED_PATH}/storage"
-            mkdir -p "${RELEASE_PATH}"
+            # Create app directory if doesn't exist
+            mkdir -p "${APP_PATH}"
             
-            # Extract deployment package
-            echo "Extracting deployment package..."
-            tar -xzf "${RELEASES_PATH}/deployment.tar.gz" -C "${RELEASE_PATH}"
-            rm "${RELEASES_PATH}/deployment.tar.gz"
+            # Backup storage and .env
+            TEMP_STORAGE="/tmp/storage_backup_$$"
+            TEMP_ENV="/tmp/.env_backup_$$"
             
-            # Setup shared storage
-            if [ ! -d "${SHARED_PATH}/storage/app" ]; then
-              echo "Initializing shared storage..."
-              mkdir -p "${SHARED_PATH}/storage/app/public"
-              mkdir -p "${SHARED_PATH}/storage/framework/cache/data"
-              mkdir -p "${SHARED_PATH}/storage/framework/sessions"
-              mkdir -p "${SHARED_PATH}/storage/framework/views"
-              mkdir -p "${SHARED_PATH}/storage/logs"
-              mkdir -p "${SHARED_PATH}/storage/blog"
-              mkdir -p "${SHARED_PATH}/storage/products"
-              mkdir -p "${SHARED_PATH}/storage/categories"
-              mkdir -p "${SHARED_PATH}/storage/articles"
-              mkdir -p "${SHARED_PATH}/storage/editor"
+            if [ -d "${APP_PATH}/storage" ]; then
+              cp -r "${APP_PATH}/storage" "${TEMP_STORAGE}"
             fi
             
-            # Link shared storage to release
-            echo "Linking shared storage..."
-            ln -nfs "${SHARED_PATH}/storage" "${RELEASE_PATH}/storage"
+            if [ -f "${APP_PATH}/.env" ]; then
+              cp "${APP_PATH}/.env" "${TEMP_ENV}"
+            fi
             
-            # Copy or link .env file
-            if [ -f "${SHARED_PATH}/.env" ]; then
-              echo "Linking existing .env file..."
-              ln -nfs "${SHARED_PATH}/.env" "${RELEASE_PATH}/.env"
-            elif [ -f "${CURRENT_PATH}/.env" ]; then
-              echo "Copying .env from current release..."
-              cp "${CURRENT_PATH}/.env" "${SHARED_PATH}/.env"
-              ln -nfs "${SHARED_PATH}/.env" "${RELEASE_PATH}/.env"
+            # Extract new deployment
+            cd "${APP_PATH}"
+            tar -xzf /tmp/deploy.tar.gz
+            rm /tmp/deploy.tar.gz
+            
+            # Restore storage
+            if [ -d "${TEMP_STORAGE}" ]; then
+              rm -rf storage
+              mv "${TEMP_STORAGE}" storage
             else
-              echo "First deployment - creating .env file from environment variables..."
-              cat > "${SHARED_PATH}/.env" << 'ENV_EOF'
-APP_NAME=Laravel
-APP_ENV=production
-APP_KEY=
-APP_DEBUG=false
-APP_TIMEZONE=UTC
-APP_URL=http://localhost
-
-APP_LOCALE=en
-APP_FALLBACK_LOCALE=en
-APP_FAKER_LOCALE=en_US
-
-APP_MAINTENANCE_DRIVER=file
-
-BCRYPT_ROUNDS=12
-
-LOG_CHANNEL=stack
-LOG_STACK=single
-LOG_DEPRECATIONS_CHANNEL=null
-LOG_LEVEL=debug
-
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=laravel
-DB_USERNAME=root
-DB_PASSWORD=
-
-SESSION_DRIVER=database
-SESSION_LIFETIME=120
-SESSION_ENCRYPT=false
-SESSION_PATH=/
-SESSION_DOMAIN=null
-
-BROADCAST_CONNECTION=log
-FILESYSTEM_DISK=local
-QUEUE_CONNECTION=database
-
-CACHE_STORE=database
-CACHE_PREFIX=
-
-MEMCACHED_HOST=127.0.0.1
-
-REDIS_CLIENT=phpredis
-REDIS_HOST=127.0.0.1
-REDIS_PASSWORD=null
-REDIS_PORT=6379
-
-MAIL_MAILER=log
-MAIL_HOST=127.0.0.1
-MAIL_PORT=2525
-MAIL_USERNAME=null
-MAIL_PASSWORD=null
-MAIL_ENCRYPTION=null
-MAIL_FROM_ADDRESS="hello@example.com"
-MAIL_FROM_NAME="${APP_NAME}"
-
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_DEFAULT_REGION=us-east-1
-AWS_BUCKET=
-AWS_USE_PATH_STYLE_ENDPOINT=false
-
-VITE_APP_NAME="${APP_NAME}"
-ENV_EOF
-              
-              echo "⚠️  IMPORTANT: Default .env file created at ${SHARED_PATH}/.env"
-              echo "⚠️  Please update it with your actual configuration before the next deployment!"
-              
-              ln -nfs "${SHARED_PATH}/.env" "${RELEASE_PATH}/.env"
+              # First deployment - create storage structure
+              mkdir -p storage/app/public
+              mkdir -p storage/framework/{cache,sessions,views}
+              mkdir -p storage/logs
+              mkdir -p storage/{blog,products,categories,articles,editor}
+              chmod -R 775 storage
             fi
             
-            # Set proper permissions
-            echo "Setting permissions..."
-            chmod -R 755 "${RELEASE_PATH}/bootstrap/cache"
-            chmod -R 775 "${SHARED_PATH}/storage"
-            
-            # Change to release directory
-            cd "${RELEASE_PATH}"
-            
-            # Generate application key if not set
-            if ! grep -q "APP_KEY=base64:" "${SHARED_PATH}/.env"; then
-              echo "Generating application key..."
-              php artisan key:generate --force
+            # Restore or create .env
+            if [ -f "${TEMP_ENV}" ]; then
+              mv "${TEMP_ENV}" .env
+            else
+              # First deployment - create .env
+              cp .env.example .env
+              php artisan key:generate
+              echo "⚠️ Please update .env with your database and app settings!"
             fi
             
-            # Run Laravel optimization commands
-            echo "Running Laravel optimization..."
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-            
-            # Run database migrations
-            echo "Running database migrations..."
+            # Run Laravel commands
             php artisan migrate --force
-            
-            # Create storage link
             php artisan storage:link
-            
-            # Verify deployment
-            echo "Verifying deployment..."
-            php artisan --version || { echo "Deployment verification failed"; exit 1; }
-            
-            # Atomic switch to new release
-            echo "Switching to new release..."
-            ln -nfs "${RELEASE_PATH}" "${CURRENT_PATH}"
-            
-            echo "=== Deployment Successful ==="
-            echo "Current release: ${RELEASE_NAME}"
-            echo "Path: ${CURRENT_PATH}"
-            
-            # Keep only last 3 releases
-            echo "Cleaning old releases..."
-            cd "${RELEASES_PATH}"
-            ls -t | tail -n +4 | xargs -r rm -rf
-            
-            echo "Remaining releases:"
-            ls -lt "${RELEASES_PATH}"
-            
-            # Optional: Restart services (uncomment if needed)
-            # sudo systemctl restart php8.3-fpm
-            # php artisan queue:restart
-            # php artisan octane:reload
-
-      - name: Deployment notification
-        if: success()
-        run: echo "✅ Deployment completed successfully!"
-
-  rollback:
-    name: Rollback on Failure
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: failure()
-    
-    steps:
-      - name: Rollback to previous release
-        uses: appleboy/ssh-action@v1.1.0
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT || 22 }}
-          script: |
-            set -e
-            
-            BASE_PATH="${{ secrets.SERVER_PATH }}"
-            RELEASES_PATH="${BASE_PATH}/releases"
-            CURRENT_PATH="${BASE_PATH}/current"
-            
-            echo "=== Starting Rollback ==="
-            
-            # Get previous release (second most recent)
-            PREVIOUS_RELEASE=$(ls -t "${RELEASES_PATH}" | sed -n '2p')
-            
-            if [ -z "${PREVIOUS_RELEASE}" ]; then
-              echo "❌ No previous release found for rollback"
-              exit 1
-            fi
-            
-            PREVIOUS_PATH="${RELEASES_PATH}/${PREVIOUS_RELEASE}"
-            
-            # Remove failed release (most recent)
-            FAILED_RELEASE=$(ls -t "${RELEASES_PATH}" | head -1)
-            echo "Removing failed release: ${FAILED_RELEASE}"
-            rm -rf "${RELEASES_PATH}/${FAILED_RELEASE}"
-            
-            # Switch to previous release
-            echo "Rolling back to: ${PREVIOUS_RELEASE}"
-            ln -nfs "${PREVIOUS_PATH}" "${CURRENT_PATH}"
-            
-            # Clear caches
-            cd "${CURRENT_PATH}"
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             
-            echo "=== Rollback Completed ==="
-            echo "Restored to: ${PREVIOUS_RELEASE}"
-
-      - name: Rollback notification
-        run: echo "⚠️ Deployment failed! Rolled back to previous release."
+            echo "=== Deployment Complete ==="
