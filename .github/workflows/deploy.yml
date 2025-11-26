@@ -182,7 +182,7 @@ jobs:
               for user in nginx www-data apache; do
                 if id "$user" &>/dev/null; then
                   echo "Found web server user: $user"
-                  chown -R $user:$user storage bootstrap/cache 2>/dev/null || echo "Note: Could not change ownership (may need sudo)"
+                  sudo chown -R $user:$user storage bootstrap/cache 2>/dev/null || echo "Note: Could not change ownership (may need sudo)"
                   sudo chown -h $user:$user public/storage 2>/dev/null || echo "Note: Could not change storage link ownership"
                   break
                 fi
