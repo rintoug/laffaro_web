@@ -82,7 +82,7 @@ jobs:
           script: |
             set -e
             
-            APP_PATH="/home/web/sites/laffaro_test"
+            APP_PATH="/home/web/sites/laffaro.com/html"
             
             echo "=== Starting Deployment ==="
             echo "Deploying to: ${APP_PATH}"
