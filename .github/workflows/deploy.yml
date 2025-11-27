@@ -116,7 +116,7 @@ jobs:
               mkdir -p storage/app/public
               mkdir -p storage/framework/{cache,sessions,views}
               mkdir -p storage/logs
-              mkdir -p storage/{blog,products,categories,articles,editor}
+              mkdir -p storage/app/public/{blog,products,categories,articles,editor}
               chmod -R 775 storage
             fi
             
@@ -165,28 +165,6 @@ jobs:
               echo "⚠️ Storage link creation failed"
             fi
             
-            # Debug: Check current ownership and permissions
-            echo "=== Debug Information ==="
-            echo "Current user: $(whoami)"
-            echo "Storage ownership:"
-            ls -la storage/ | head -5
-            echo "Public storage link:"
-            ls -la public/ | grep storage
-            echo "Sample file in storage:"
-            find storage/app/public -type f | head -1 | xargs ls -la 2>/dev/null || echo "No files found"
-            
-            # Try to set ownership for nginx web server
-            echo "Attempting to set ownership for nginx..."
-            if command -v chown &> /dev/null; then
-              # Try common nginx users
-              for user in nginx www-data apache; do
-                if id "$user" &>/dev/null; then
-                  echo "Found web server user: $user"
-                  sudo chown -R $user:$user storage bootstrap/cache 2>/dev/null || echo "Note: Could not change ownership (may need sudo)"
-                  sudo chown -h $user:$user public/storage 2>/dev/null || echo "Note: Could not change storage link ownership"
-                  break
-                fi
-              done
-            fi
+          
             
             echo "=== Deployment Complete ==="
