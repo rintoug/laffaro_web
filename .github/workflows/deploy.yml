@@ -109,8 +109,8 @@ jobs:
             
             # Restore storage
             if [ -d "${TEMP_STORAGE}" ]; then
-              rm -rf storage
-              mv "${TEMP_STORAGE}" storage
+              sudo rm -rf storage
+              sudo mv "${TEMP_STORAGE}" storage
             else
               # First deployment - create storage structure
               mkdir -p storage/app/public
@@ -122,11 +122,11 @@ jobs:
             
             # Restore or create .env
             if [ -f "${TEMP_ENV}" ]; then
-              mv "${TEMP_ENV}" .env
+              sudo mv "${TEMP_ENV}" .env
             else
               # First deployment - create .env
-              cp .env.example .env
-              php artisan key:generate
+              sudo cp .env.example .env
+              sudo php artisan key:generate
             fi
             
             # Update database credentials from GitHub secrets
