@@ -104,13 +104,13 @@ jobs:
             
             # Extract new deployment
             cd "${APP_PATH}"
-            sudo tar -xzf /tmp/deploy.tar.gz
-            sudo rm /tmp/deploy.tar.gz
+            tar -xzf /tmp/deploy.tar.gz
+            rm /tmp/deploy.tar.gz
             
             # Restore storage
             if [ -d "${TEMP_STORAGE}" ]; then
-              sudo rm -rf storage
-              sudo mv "${TEMP_STORAGE}" storage
+              rm -rf storage
+              mv "${TEMP_STORAGE}" storage
             else
               # First deployment - create storage structure
               mkdir -p storage/app/public
@@ -122,37 +122,37 @@ jobs:
             
             # Restore or create .env
             if [ -f "${TEMP_ENV}" ]; then
-              sudo mv "${TEMP_ENV}" .env
+              mv "${TEMP_ENV}" .env
             else
               # First deployment - create .env
-              sudo cp .env.example .env
-              sudo php artisan key:generate
+              cp .env.example .env
+              php artisan key:generate
             fi
             
             # Update database credentials from GitHub secrets
-            sudo sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
-            sudo sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
-            sudo sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
-            sudo sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sudo sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+            sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+            sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
             
             echo "✅ Database credentials updated from GitHub secrets"
 
             # Fix storage permissions
             echo "Setting storage permissions..."
-            sudo chmod -R 775 storage
-            sudo sudo chmod -R 775 bootstrap/cache
+            chmod -R 775 storage
+            chmod -R 775 bootstrap/cache
             
             # Ensure storage directories are web-accessible
-            sudo find storage -type f -exec chmod 664 {} \;
-            sudo find storage -type d -exec chmod 775 {} \;
+            find storage -type f -exec chmod 664 {} \;
+            find storage -type d -exec chmod 775 {} \;
             
             # Remove old storage link if exists
-            sudo rm -f public/storage
+            rm -f public/storage
             
             # Run Laravel commands
             php artisan migrate --force
-            sudo php artisan storage:link --force
+            php artisan storage:link --force
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
