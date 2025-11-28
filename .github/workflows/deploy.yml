@@ -83,21 +83,34 @@ jobs:
             set -e
             
             APP_PATH="/home/web/sites/laffaro.com/html"
+            SHARED_STORAGE="/home/web/sites/laffaro.com/storage"
             
             echo "=== Starting Deployment ==="
             echo "Deploying to: ${APP_PATH}"
+            echo "Shared storage: ${SHARED_STORAGE}"
             
             # Create app directory if doesn't exist
             mkdir -p "${APP_PATH}"
             
-            # Backup storage and .env
-            TEMP_STORAGE="/tmp/storage_backup_$$"
-            TEMP_ENV="/tmp/.env_backup_$$"
-            
-            if [ -d "${APP_PATH}/storage" ]; then
-              cp -r "${APP_PATH}/storage" "${TEMP_STORAGE}"
+            # Setup shared storage if first time
+            if [ ! -d "${SHARED_STORAGE}/app" ]; then
+              echo "Creating shared storage structure..."
+              mkdir -p "${SHARED_STORAGE}/app/public"
+              mkdir -p "${SHARED_STORAGE}/framework/cache/data"
+              mkdir -p "${SHARED_STORAGE}/framework/sessions"
+              mkdir -p "${SHARED_STORAGE}/framework/views"
+              mkdir -p "${SHARED_STORAGE}/logs"
+              mkdir -p "${SHARED_STORAGE}/app/public/blog"
+              mkdir -p "${SHARED_STORAGE}/app/public/products"
+              mkdir -p "${SHARED_STORAGE}/app/public/categories"
+              mkdir -p "${SHARED_STORAGE}/app/public/articles"
+              mkdir -p "${SHARED_STORAGE}/app/public/editor"
+              chmod -R 775 "${SHARED_STORAGE}"
+              echo "✅ Shared storage created"
             fi
             
+            # Backup .env
+            TEMP_ENV="/tmp/.env_backup_$$"
             if [ -f "${APP_PATH}/.env" ]; then
               cp "${APP_PATH}/.env" "${TEMP_ENV}"
             fi
@@ -107,18 +120,10 @@ jobs:
             tar -xzf /tmp/deploy.tar.gz
             rm /tmp/deploy.tar.gz
             
-            # Restore storage
-            if [ -d "${TEMP_STORAGE}" ]; then
-              rm -rf storage
-              mv "${TEMP_STORAGE}" storage
-            else
-              # First deployment - create storage structure
-              mkdir -p storage/app/public
-              mkdir -p storage/framework/{cache,sessions,views}
-              mkdir -p storage/logs
-              mkdir -p storage/app/public/{blog,products,categories,articles,editor}
-              chmod -R 775 storage
-            fi
+            # Link shared storage
+            echo "Linking shared storage..."
+            rm -rf storage
+            ln -nfs "${SHARED_STORAGE}" storage
             
             # Restore or create .env
             if [ -f "${TEMP_ENV}" ]; then
@@ -137,10 +142,13 @@ jobs:
             sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
             
             echo "✅ Database credentials updated from GitHub secrets"
-
-        
             
-            # Remove old storage link if exists
+            # Fix permissions on shared storage
+            chmod -R 775 "${SHARED_STORAGE}"
+            find "${SHARED_STORAGE}" -type f -exec chmod 664 {} \;
+            find "${SHARED_STORAGE}" -type d -exec chmod 775 {} \;
+            
+            # Remove old public storage link if exists
             rm -f public/storage
             
             # Run Laravel commands
