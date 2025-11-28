@@ -104,8 +104,8 @@ jobs:
             
             # Extract new deployment
             cd "${APP_PATH}"
-            tar -xzf /tmp/deploy.tar.gz
-            rm /tmp/deploy.tar.gz
+            sudo tar -xzf /tmp/deploy.tar.gz
+            sudo rm /tmp/deploy.tar.gz
             
             # Restore storage
             if [ -d "${TEMP_STORAGE}" ]; then
