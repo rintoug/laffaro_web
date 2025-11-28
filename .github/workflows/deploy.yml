@@ -134,7 +134,7 @@ jobs:
             sudo sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
             sudo sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
             sudo sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+            sudo sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
             
             echo "✅ Database credentials updated from GitHub secrets"
 
@@ -148,7 +148,7 @@ jobs:
             sudo find storage -type d -exec chmod 775 {} \;
             
             # Remove old storage link if exists
-            rm -f public/storage
+            sudo rm -f public/storage
             
             # Run Laravel commands
             php artisan migrate --force
