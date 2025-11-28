@@ -1,6 +1,6 @@
 @extends('front.layout')
 
-@section('title', isset($category) ? $category->meta_title ?: $category->name . ' - Gift Store' : (isset($giftType) ? $giftType->meta_title ?: $giftType->name . ' - Gift Store' : (isset($searchTerm) && $searchTerm ? 'Search Results for "' . $searchTerm . '" - Gift Store' : 'Home - Gift Store')))
+@section('title', isset($category) ? $category->meta_title ?: $category->name . ' - Laffaro.com' : (isset($giftType) ? $giftType->meta_title ?: $giftType->name . ' - Laffaro.com' : (isset($searchTerm) && $searchTerm ? 'Search Results for "' . $searchTerm . '" - Laffaro.com' : 'Laffaro | The Best Gag Gifts Online | Funny, Weird')))
 
 @if(isset($category))
     @section('meta_description', $category->meta_description ?: 'Browse our collection of ' . $category->name)
