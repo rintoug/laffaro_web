@@ -24,7 +24,7 @@ class ProductController extends Controller
                   ->orWhere('slug', 'like', "%{$search}%");
         }
 
-        $products = $query->paginate($perPage);
+        $products = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
         return response()->json([
             'success' => true,

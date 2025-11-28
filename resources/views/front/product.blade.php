@@ -1,6 +1,6 @@
 @extends('front.layout')
 
-@section('title', $product->meta_title ?: $product->title . ' - Gift Store')
+@section('title', $product->meta_title ?: $product->title . ' | Gifts | Laffaro.com')
 @section('meta_description', $product->meta_description ?: $product->short_description)
 @section('meta_keywords', $product->meta_keywords)
 

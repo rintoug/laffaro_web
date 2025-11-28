@@ -138,14 +138,7 @@ jobs:
             
             echo "✅ Database credentials updated from GitHub secrets"
 
-            # Fix storage permissions
-            echo "Setting storage permissions..."
-            chmod -R 775 storage
-            chmod -R 775 bootstrap/cache
-            
-            # Ensure storage directories are web-accessible
-            find storage -type f -exec chmod 664 {} \;
-            find storage -type d -exec chmod 775 {} \;
+        
             
             # Remove old storage link if exists
             rm -f public/storage
