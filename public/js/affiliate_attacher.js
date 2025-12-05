@@ -34,7 +34,7 @@
         name: 'amazon-us',
         domains: ['www.amazon.com', 'amazon.com'],
         param: 'tag',
-        value: 'yourUStag-20' // <-- replace with your Amazon US tag
+        value: 'tbomoney-20' // <-- replace with your Amazon US tag
       },
       // Amazon UK
       {
