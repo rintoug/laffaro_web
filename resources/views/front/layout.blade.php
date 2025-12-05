@@ -340,6 +340,10 @@
                 </div>
             </div>
 
+            <div class="text-gray-400 leading-relaxed mb-6 max-w-md">
+                Laffaro.com participates in the Amazon Associates Program. This means we may earn a small commission when you purchase products through links on our site — at no extra cost to you
+            </div>
+
             <!-- Bottom Bar -->
             <div class="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
                 <p class="text-gray-400 text-sm">&copy; {{ date('Y') }} Gift Store. All rights reserved.</p>
@@ -398,5 +402,16 @@
     </script>
     
     @vite(['resources/js/front.js'])
+    <script type="text/javascript" src="{{ asset('js/affiliate_attacher.js') }}" ></script>
+    <script>
+        // Add a new site or adjust an existing one
+    AffiliateTagger.addRule({
+        name: 'amazon-us',
+        domains: ['www.amazon.com', 'amazon.com'],
+        param: 'tag',
+        value: 'tbomoney-20'
+    });
+
+    </script>
 </body>
 </html>
