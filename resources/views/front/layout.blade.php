@@ -402,6 +402,15 @@
     </script>
     
     @vite(['resources/js/front.js'])
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-553EF4X1BH"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-553EF4X1BH');
+    </script>
     <script type="text/javascript" src="{{ asset('js/affiliate_attacher.js') }}" ></script>
     <script>
         // Add a new site or adjust an existing one
